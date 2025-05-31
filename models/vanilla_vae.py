@@ -11,11 +11,17 @@ class VanillaVAE(BaseVAE):
     def __init__(self,
                  in_channels: int,
                  latent_dim: int,
+                 input_height: int = 64,
+                 input_width: int = 64,
                  hidden_dims: List = None,
                  **kwargs) -> None:
         super(VanillaVAE, self).__init__()
 
         self.latent_dim = latent_dim
+        self.input_channels = in_channels
+        self.input_height = input_height
+        self.input_width = input_width
+        self._enc_shape = None
 
         modules = []
         if hidden_dims is None:
@@ -33,14 +39,23 @@ class VanillaVAE(BaseVAE):
             in_channels = h_dim
 
         self.encoder = nn.Sequential(*modules)
-        self.fc_mu = nn.Linear(hidden_dims[-1]*4, latent_dim)
-        self.fc_var = nn.Linear(hidden_dims[-1]*4, latent_dim)
+
+        with torch.no_grad():
+            dummy = torch.zeros(1, self.input_channels, input_height, input_width)
+            enc_out = self.encoder(dummy)
+            self._enc_shape = enc_out.shape[1:]  # (C, H, W)
+            enc_flattened = enc_out.numel()
+            # print("_enc_shape_:", self._enc_shape)
+            # print("enc_flattened:", enc_flattened)
+
+        self.fc_mu = nn.Linear(enc_flattened, latent_dim)
+        self.fc_var = nn.Linear(enc_flattened, latent_dim)
 
 
         # Build Decoder
         modules = []
 
-        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 4)
+        self.decoder_input = nn.Linear(latent_dim, enc_flattened)
 
         hidden_dims.reverse()
 
@@ -70,7 +85,7 @@ class VanillaVAE(BaseVAE):
                                                output_padding=1),
                             nn.BatchNorm2d(hidden_dims[-1]),
                             nn.LeakyReLU(),
-                            nn.Conv2d(hidden_dims[-1], out_channels= 3,
+                            nn.Conv2d(hidden_dims[-1], out_channels= self.input_channels,
                                       kernel_size= 3, padding= 1),
                             nn.Tanh())
 
@@ -82,7 +97,9 @@ class VanillaVAE(BaseVAE):
         :return: (Tensor) List of latent codes
         """
         result = self.encoder(input)
+        # print("Encoder output shape before flatten:", result.shape)
         result = torch.flatten(result, start_dim=1)
+        # print("Encoder output shape after flatten:", result.shape)
 
         # Split the result into mu and var components
         # of the latent Gaussian distribution
@@ -99,9 +116,13 @@ class VanillaVAE(BaseVAE):
         :return: (Tensor) [B x C x H x W]
         """
         result = self.decoder_input(z)
-        result = result.view(-1, 512, 2, 2)
+        # print("Decoder input shape (before view):", result.shape)
+        result = result.view(-1, *self._enc_shape)
         result = self.decoder(result)
         result = self.final_layer(result)
+
+        if result.shape[-2:] != (self.input_height, self.input_width):
+            result = F.interpolate(result, size=(self.input_height, self.input_width), mode='bilinear', align_corners=False)
         return result
 
     def reparameterize(self, mu: Tensor, logvar: Tensor) -> Tensor:

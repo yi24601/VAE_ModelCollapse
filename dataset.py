@@ -8,6 +8,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import CelebA
+from torchvision.datasets import MNIST
 import zipfile
 
 
@@ -23,6 +24,33 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         pass
 
+class MNISTDataModule(LightningDataModule):
+    def __init__(self, data_dir, train_batch_size=64, val_batch_size=64, num_workers=4, pin_memory=False, resize_mnist=False):
+        super().__init__()
+        self.data_dir = data_dir
+        self.train_batch_size = train_batch_size
+        self.val_batch_size = val_batch_size
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.resize_mnist = resize_mnist
+
+    def setup(self, stage=None):
+        transform_list = []
+        if self.resize_mnist:
+            transform_list.append(transforms.Resize((64, 64)))
+        transform_list.append(transforms.ToTensor())
+        transform = transforms.Compose(transform_list)
+        self.train_dataset = MNIST(self.data_dir, train=True, download=True, transform=transform)
+        self.val_dataset = MNIST(self.data_dir, train=False, download=True, transform=transform)
+
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, pin_memory=self.pin_memory, shuffle=True)
+
+    def test_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.val_batch_size,num_workers=self.num_workers, pin_memory=self.pin_memory)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.val_batch_size, num_workers=self.num_workers, pin_memory=self.pin_memory)
 
 class MyCelebA(CelebA):
     """
@@ -31,10 +59,9 @@ class MyCelebA(CelebA):
     Download and Extract
     URL : https://drive.google.com/file/d/1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ/view?usp=sharing
     """
-    
+    # pass
     def _check_integrity(self) -> bool:
-        return True
-    
+        return True    
     
 
 class OxfordPets(Dataset):
@@ -140,7 +167,7 @@ class VAEDataset(LightningDataModule):
             self.data_dir,
             split='train',
             transform=train_transforms,
-            download=False,
+            download=False,  # Set to True to download the dataset if not already present
         )
         
         # Replace CelebA with your dataset
@@ -148,7 +175,7 @@ class VAEDataset(LightningDataModule):
             self.data_dir,
             split='test',
             transform=val_transforms,
-            download=False,
+            download=False,  # Set to True to download the dataset if not already present
         )
 #       ===============================================================
         
