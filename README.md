@@ -14,6 +14,8 @@
 
 </p>
 
+**Note:** This repo is based on [AntixK/PyTorch-VAE](https://github.com/AntixK/PyTorch-VAE), with custom modifications for MNIST and CelebA training experiments.
+
 **Update 22/12/2021:** Added support for PyTorch Lightning 1.5.6 version and cleaned up the code.
 
 A collection of Variational AutoEncoders (VAEs) implemented in pytorch with focus on reproducibility. The aim of this project is to provide
@@ -30,8 +32,8 @@ Here are the [results](https://github.com/AntixK/PyTorch-VAE/blob/master/README.
 
 ### Installation
 ```
-$ git clone https://github.com/AntixK/PyTorch-VAE
-$ cd PyTorch-VAE
+$ git clone https://github.com/yi24601/VAE_ModelCollpase
+$ cd VAE_ModelCollpase
 $ pip install -r requirements.txt
 ```
 
@@ -39,6 +41,7 @@ $ pip install -r requirements.txt
 ```
 $ cd PyTorch-VAE
 $ python run.py -c configs/<config-file-name.yaml>
+$ test_run.ipynb
 ```
 **Config file template**
 
