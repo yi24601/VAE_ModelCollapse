@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Union, Any, Callable
 from torchvision.datasets.folder import default_loader
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import transforms
 from torchvision.datasets import CelebA
 from torchvision.datasets import MNIST
@@ -24,8 +24,25 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         pass
 
+class SyntheticDataset(Dataset):
+    def __init__(self, images, labels=None, transform=None):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return self.images.shape[0]
+
+    def __getitem__(self, idx):
+        img = self.images[idx]
+        if self.transform:
+            img = self.transform(img)
+        label = self.labels[idx] if self.labels is not None else 0
+        return img, label
+
 class MNISTDataModule(LightningDataModule):
-    def __init__(self, data_dir, train_batch_size=64, val_batch_size=64, num_workers=4, pin_memory=False, resize_mnist=False):
+    def __init__(self, data_dir, train_batch_size=64, val_batch_size=64, num_workers=4, pin_memory=False,
+                 resize_mnist=False, subset_indices=None, synthetic_images=None, synthetic_labels=None):
         super().__init__()
         self.data_dir = data_dir
         self.train_batch_size = train_batch_size
@@ -33,6 +50,9 @@ class MNISTDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.resize_mnist = resize_mnist
+        self.subset_indices = subset_indices
+        self.synthetic_images = synthetic_images
+        self.synthetic_labels = synthetic_labels
 
     def setup(self, stage=None):
         transform_list = []
@@ -40,7 +60,23 @@ class MNISTDataModule(LightningDataModule):
             transform_list.append(transforms.Resize((64, 64)))
         transform_list.append(transforms.ToTensor())
         transform = transforms.Compose(transform_list)
-        self.train_dataset = MNIST(self.data_dir, train=True, download=True, transform=transform)
+
+        full_dataset = MNIST(self.data_dir, train=True, download=True, transform=transform)
+        if self.subset_indices is not None:             
+            self.train_dataset = Subset(full_dataset, self.subset_indices)
+        else:
+            self.train_dataset = full_dataset
+
+        if self.synthetic_images is not None:
+            synthetic_dataset = SyntheticDataset(
+                images=self.synthetic_images,
+                labels=self.synthetic_labels,
+            )
+            if self.train_dataset is not None:
+                self.train_dataset = torch.utils.data.ConcatDataset([self.train_dataset, synthetic_dataset])
+            else:
+                self.train_dataset = synthetic_dataset
+            
         self.val_dataset = MNIST(self.data_dir, train=False, download=True, transform=transform)
 
     def train_dataloader(self):
